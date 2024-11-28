@@ -183,10 +183,28 @@ def summarize_and_visualize(data, predictions, selected_models):
 
     # Plotting the fraud probability by transaction amount
     fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Set background color
+    fig.patch.set_facecolor('black')
+    ax.set_facecolor('black')
     fraud_prob_df.plot(kind='bar', ax=ax, colormap="viridis", rot=0)
-    ax.set_title("Fraud Probability by Transaction Amount")
-    ax.set_ylabel("Fraud Probability (%)")
+
+    # Customize text and grid colors
+    ax.set_title("Fraud Probability by Transaction Amount", color='white')
+    ax.set_ylabel("Fraud Probability (%)", color='white')
+    ax.set_xlabel("Transaction Amount Categories", color='white')
+    ax.tick_params(colors='white')  # Tick label colors
+    ax.yaxis.label.set_color('white')
+    ax.xaxis.label.set_color('white')
+    ax.spines['bottom'].set_color('white')
+    ax.spines['left'].set_color('white')
+
+    # Modify legend to fit the dark theme
+    ax.legend(facecolor='black', edgecolor='white', labelcolor='white')
+
+    # Show the plot in Streamlit
     st.pyplot(fig)
+
 
     # Add analysis summary and visualization to history
     st.session_state["history"].append({
@@ -210,6 +228,14 @@ def data_visualization_section(data):
     group_labels = ["Not Fraud", "Fraud"]
     fig1 = ff.create_distplot(hist_data, group_labels, show_hist=False, show_rug=False)
     fig1.update_layout(title="Credit Card Transactions Time Density Plot", xaxis_title="Time [s]")
+    
+    fig1.update_layout(
+        title="Credit Card Transactions Time Density Plot",
+        xaxis_title="Time [s]",
+        paper_bgcolor="black",
+        plot_bgcolor="black",
+        font=dict(color="white")
+    )
     st.plotly_chart(fig1)
     graphs.append(fig1)
 
@@ -228,6 +254,9 @@ def data_visualization_section(data):
         title="Credit Card Fraud Class - Data Imbalance",
         xaxis_title="Class (0: Not Fraud, 1: Fraud)",
         yaxis_title="Number of Transactions",
+        paper_bgcolor="black",
+        plot_bgcolor="black",
+        font=dict(color="white")
     )
     st.plotly_chart(fig2)
     graphs.append(fig2)
@@ -246,6 +275,9 @@ def data_visualization_section(data):
         title="Amount of Fraudulent Transactions",
         xaxis_title="Time [s]",
         yaxis_title="Amount",
+        paper_bgcolor="black",
+        plot_bgcolor="black",
+        font=dict(color="white")
     )
     st.plotly_chart(fig3)
     graphs.append(fig3)
@@ -264,12 +296,17 @@ def correlation_heatmap(data):
     corr_matrix = numeric_data.corr()
     
     fig, ax = plt.subplots(figsize=(12, 10))
-    cax = ax.matshow(corr_matrix, cmap="coolwarm")
-    plt.xticks(range(len(corr_matrix.columns)), corr_matrix.columns, rotation=90)
-    plt.yticks(range(len(corr_matrix.columns)), corr_matrix.columns)
+    fig.patch.set_facecolor('black')
+    ax.set_facecolor('black')
+    cax = ax.matshow(corr_matrix, cmap="Grays")
+
+    plt.xticks(range(len(corr_matrix.columns)), corr_matrix.columns, rotation=90, color="white")
+    plt.yticks(range(len(corr_matrix.columns)), corr_matrix.columns, color="white")
     fig.colorbar(cax)
-    plt.title("Feature Correlation Heatmap", pad=20)
+    plt.title("Feature Correlation Heatmap", pad=20, color="white")
     st.pyplot(fig)
+
+    
 def main():
     # Initialize session state keys if not already present
     if "page" not in st.session_state:
@@ -332,13 +369,19 @@ def main():
             st.info("No history available.")
         else:
             for record in st.session_state["history"]:
-                file_name = record.get("file_name", "Unknown File")  # Default to 'Unknown File' if key is missing
+                file_name = record.get("file_name", "Unknown File")
                 st.subheader(f"File: {file_name}")
 
                 # Display all graphs in the record
                 graphs = record.get("graphs", [])
                 for graph in graphs:
-                    st.plotly_chart(graph)
+                    # If the graph is a plotly figure, use st.plotly_chart
+                    if isinstance(graph, go.Figure):
+                        st.plotly_chart(graph)
+                    # If the graph is a matplotlib figure, use st.pyplot
+                    elif isinstance(graph, plt.Figure):
+                        st.pyplot(graph)
+                st.write("------")
 
 
 if __name__ == "__main__":
