@@ -82,12 +82,18 @@ def save_to_history(file_name, graphs, fraud_transactions, selected_models):
     """Store the history of graphs, fraud transactions, and selected models."""
     if "history" not in st.session_state:
         st.session_state["history"] = []
+
+    # Validate file_name
+    file_name = file_name if file_name else "Unknown File"
+
+    # Save the record
     st.session_state["history"].append({
         "file_name": file_name,
         "graphs": graphs,
         "fraud_transactions": fraud_transactions,
         "selected_models": selected_models
     })
+
 
 def fraud_summary_table(data, models, selected_models, features):
     st.subheader("Fraud Detection Summary Table")
@@ -312,16 +318,21 @@ def main():
 
     elif st.session_state.page == "History":
         st.title("History")
-        
+    
         # Check if history is empty
         if not st.session_state["history"]:
             st.info("No history available.")
         else:
             for record in st.session_state["history"]:
-                file_name = record.get("file_name", "Unknown File")  # Default to 'Unknown File' if key is missing
+                file_name = record.get("file_name", "Unknown File")
+                
+                # Skip rendering if file_name is invalid or unknown
+                if not file_name or file_name == "Unknown File":
+                    continue
+
                 st.subheader(f"File: {file_name}")
 
-                # Display all graphs in the record
+                # Display graphs
                 graphs = record.get("graphs", [])
                 for graph in graphs:
                     st.plotly_chart(graph)
@@ -336,6 +347,6 @@ def main():
                         st.dataframe(fraud_data)
                     else:
                         st.write(f"No fraud transactions detected by {model}.")
-
+                        
 if __name__ == "__main__":
     main()
