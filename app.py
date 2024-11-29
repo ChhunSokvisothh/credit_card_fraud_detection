@@ -369,19 +369,13 @@ def main():
             st.info("No history available.")
         else:
             for record in st.session_state["history"]:
-                file_name = record.get("file_name", "Unknown File")
+                file_name = record.get("file_name", "Unknown File")  # Default to 'Unknown File' if key is missing
                 st.subheader(f"File: {file_name}")
 
                 # Display all graphs in the record
                 graphs = record.get("graphs", [])
                 for graph in graphs:
-                    # If the graph is a plotly figure, use st.plotly_chart
-                    if isinstance(graph, go.Figure):
-                        st.plotly_chart(graph)
-                    # If the graph is a matplotlib figure, use st.pyplot
-                    elif isinstance(graph, plt.Figure):
-                        st.pyplot(graph)
-                st.write("------")
+                    st.plotly_chart(graph)
 
 
 if __name__ == "__main__":
