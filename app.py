@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
+import plotly.express as px
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.preprocessing import StandardScaler
@@ -77,10 +78,16 @@ def detect_features(data):
         return None, None
     return v_features, ["Time"] + v_features + ["Amount"]
 
-def save_to_history(file_name, graphs):
+def save_to_history(file_name, graphs, fraud_transactions, selected_models):
+    """Store the history of graphs, fraud transactions, and selected models."""
     if "history" not in st.session_state:
         st.session_state["history"] = []
-    st.session_state["history"].append({"file_name": file_name, "graphs": graphs})
+    st.session_state["history"].append({
+        "file_name": file_name,
+        "graphs": graphs,
+        "fraud_transactions": fraud_transactions,
+        "selected_models": selected_models
+    })
 
 def fraud_summary_table(data, models, selected_models, features):
     st.subheader("Fraud Detection Summary Table")
@@ -110,11 +117,12 @@ def fraud_summary_table(data, models, selected_models, features):
     st.table(summary_df)
     return summary_df
 
-def fraud_detection_section(data, models, selected_models, features):
+def fraud_detection_section(data, models, selected_models, features, file_name):
     st.subheader("Fraud Detection Results")
-    
+
     # Predictions dictionary
     predictions = {}
+    fraud_transactions = {}
 
     # Run predictions for each selected model
     for model_name in selected_models:
@@ -129,6 +137,10 @@ def fraud_detection_section(data, models, selected_models, features):
                 predictions[model_name] = model.predict(dmatrix)
             else:
                 predictions[model_name] = model.predict(data[features])
+
+            # Detect fraud transactions
+            fraud_indices = np.where(predictions[model_name] == 1)[0]
+            fraud_transactions[model_name] = data.iloc[fraud_indices]
         except Exception as e:
             st.error(f"Error predicting with {model_name}: {e}")
             continue
@@ -144,6 +156,10 @@ def fraud_detection_section(data, models, selected_models, features):
         # Visualize and analyze detailed results
         summarize_and_visualize(data, predictions, selected_models)
 
+    # Save visualizations and fraud transaction data to history
+    graphs = data_visualization_section(data)  # Generate data visualizations
+    save_to_history(file_name, graphs, fraud_transactions, selected_models)
+    
 def summarize_and_visualize(data, predictions, selected_models):
     st.write("### Fraud Detection Summary")
     summary = {}
@@ -158,10 +174,11 @@ def summarize_and_visualize(data, predictions, selected_models):
         fraud_transactions[model] = data.iloc[fraud_indices]
         summary[model] = {"Fraud Count": fraud_count, "Fraud Percentage": fraud_percentage}
 
-    # Displaying the summary
+    # Display the fraud summary table
     summary_df = pd.DataFrame(summary).T
     st.write(summary_df)
 
+    # Add the detected fraud transactions table to the Detailed Results section
     st.write("### Detected Fraud Transactions by Model")
     for model, fraud_data in fraud_transactions.items():
         st.write(f"#### {model}")
@@ -170,7 +187,7 @@ def summarize_and_visualize(data, predictions, selected_models):
         else:
             st.write("No fraud transactions detected by this model.")
 
-    # Displaying fraud likelihood based on transaction amount
+    # Plotting fraud likelihood based on transaction amount
     st.write("### Fraud Likelihood Based on Transaction Amount")
     data['Amount_Category'] = pd.cut(data['Amount'], bins=[0, 100, 500, 1000, np.inf], 
                                      labels=["Low (<=100)", "Moderate (100-500)", "High (500-1000)", "Very High (>1000)"])
@@ -181,30 +198,21 @@ def summarize_and_visualize(data, predictions, selected_models):
 
     fraud_prob_df = pd.DataFrame(fraud_analysis)
 
-    # Plotting the fraud probability by transaction amount
+    # Plot fraud likelihood by transaction amount
     fig, ax = plt.subplots(figsize=(8, 6))
-
-    # Set background color
     fig.patch.set_facecolor('black')
     ax.set_facecolor('black')
     fraud_prob_df.plot(kind='bar', ax=ax, colormap="viridis", rot=0)
-
-    # Customize text and grid colors
     ax.set_title("Fraud Probability by Transaction Amount", color='white')
     ax.set_ylabel("Fraud Probability (%)", color='white')
     ax.set_xlabel("Transaction Amount Categories", color='white')
-    ax.tick_params(colors='white')  # Tick label colors
+    ax.tick_params(colors='white')
     ax.yaxis.label.set_color('white')
     ax.xaxis.label.set_color('white')
     ax.spines['bottom'].set_color('white')
     ax.spines['left'].set_color('white')
-
-    # Modify legend to fit the dark theme
     ax.legend(facecolor='black', edgecolor='white', labelcolor='white')
-
-    # Show the plot in Streamlit
     st.pyplot(fig)
-
 
     # Add analysis summary and visualization to history
     st.session_state["history"].append({
@@ -219,7 +227,7 @@ def summarize_and_visualize(data, predictions, selected_models):
 
 def data_visualization_section(data):
     st.subheader("Data Visualizations")
-    graphs = []
+    graphs = []  # Initialize an empty list for graphs
 
     # Visualization 1: Time Density Plot
     class_0 = data.loc[data["Class"] == 0]["Time"]
@@ -227,86 +235,32 @@ def data_visualization_section(data):
     hist_data = [class_0, class_1]
     group_labels = ["Not Fraud", "Fraud"]
     fig1 = ff.create_distplot(hist_data, group_labels, show_hist=False, show_rug=False)
-    fig1.update_layout(title="Credit Card Transactions Time Density Plot", xaxis_title="Time [s]")
-    
-    fig1.update_layout(
-        title="Credit Card Transactions Time Density Plot",
-        xaxis_title="Time [s]",
-        paper_bgcolor="black",
-        plot_bgcolor="black",
-        font=dict(color="white")
-    )
-    st.plotly_chart(fig1)
+    fig1.update_layout(title="Credit Card Transactions Time Density Plot", xaxis_title="Time [s]", 
+                       paper_bgcolor="black", plot_bgcolor="black", font=dict(color="white"))
+    st.plotly_chart(fig1, key="time_density_plot")
     graphs.append(fig1)
 
     # Visualization 2: Class Balance
     class_balance = data["Class"].value_counts()
     df_balance = pd.DataFrame({"Class": class_balance.index, "Values": class_balance.values})
-    fig2 = go.Figure(
-        go.Bar(
-            x=df_balance["Class"],
-            y=df_balance["Values"],
-            marker=dict(color="Red"),
-            text=df_balance["Values"],
-        )
-    )
-    fig2.update_layout(
-        title="Credit Card Fraud Class - Data Imbalance",
-        xaxis_title="Class (0: Not Fraud, 1: Fraud)",
-        yaxis_title="Number of Transactions",
-        paper_bgcolor="black",
-        plot_bgcolor="black",
-        font=dict(color="white")
-    )
-    st.plotly_chart(fig2)
+    fig2 = go.Figure(go.Bar(x=df_balance["Class"], y=df_balance["Values"], 
+                            marker=dict(color="Red"), text=df_balance["Values"]))
+    fig2.update_layout(title="Credit Card Fraud Class - Data Imbalance", 
+                       xaxis_title="Class (0: Not Fraud, 1: Fraud)", yaxis_title="Number of Transactions", 
+                       paper_bgcolor="black", plot_bgcolor="black", font=dict(color="white"))
+    st.plotly_chart(fig2, key="class_balance_plot")
     graphs.append(fig2)
 
     # Visualization 3: Fraudulent Transactions
     fraud = data.loc[data["Class"] == 1]
-    fig3 = go.Figure(
-        go.Scatter(
-            x=fraud["Time"],
-            y=fraud["Amount"],
-            mode="markers",
-            marker=dict(color="rgb(238,23,11)", opacity=0.5),
-        )
-    )
-    fig3.update_layout(
-        title="Amount of Fraudulent Transactions",
-        xaxis_title="Time [s]",
-        yaxis_title="Amount",
-        paper_bgcolor="black",
-        plot_bgcolor="black",
-        font=dict(color="white")
-    )
-    st.plotly_chart(fig3)
+    fig3 = go.Figure(go.Scatter(x=fraud["Time"], y=fraud["Amount"], mode="markers", 
+                                marker=dict(color="rgb(238,23,11)", opacity=0.5)))
+    fig3.update_layout(title="Amount of Fraudulent Transactions", xaxis_title="Time [s]", yaxis_title="Amount",
+                       paper_bgcolor="black", plot_bgcolor="black", font=dict(color="white"))
+    st.plotly_chart(fig3, key="fraudulent_transactions_plot")
     graphs.append(fig3)
-
-    # Visualization 4: Correlation Heatmap
-    correlation_heatmap(data)
     return graphs
 
-def correlation_heatmap(data):
-    st.subheader("Feature Correlation Heatmap")
-    
-    # Exclude non-numeric columns for correlation calculation
-    numeric_data = data.select_dtypes(include=[np.number])
-    
-    # Calculate the correlation matrix for numeric data
-    corr_matrix = numeric_data.corr()
-    
-    fig, ax = plt.subplots(figsize=(12, 10))
-    fig.patch.set_facecolor('black')
-    ax.set_facecolor('black')
-    cax = ax.matshow(corr_matrix, cmap="Grays")
-
-    plt.xticks(range(len(corr_matrix.columns)), corr_matrix.columns, rotation=90, color="white")
-    plt.yticks(range(len(corr_matrix.columns)), corr_matrix.columns, color="white")
-    fig.colorbar(cax)
-    plt.title("Feature Correlation Heatmap", pad=20, color="white")
-    st.pyplot(fig)
-
-    
 def main():
     # Initialize session state keys if not already present
     if "page" not in st.session_state:
@@ -352,14 +306,9 @@ def main():
                 if st.button("Analyze"):
                     processed_data = preprocess_data(data, features)
 
-                    # Fraud Detection Results Section
-                    fraud_detection_section(processed_data, models, selected_models, features)
+                    # Fraud Detection Results Section (includes visualizations)
+                    fraud_detection_section(processed_data, models, selected_models, features, file_name)
 
-                    # Data Visualizations Section
-                    graphs = data_visualization_section(data)
-
-                    # Save Visualizations
-                    save_to_history(file_name, graphs)
 
     elif st.session_state.page == "History":
         st.title("History")
@@ -377,6 +326,16 @@ def main():
                 for graph in graphs:
                     st.plotly_chart(graph)
 
+                # Display fraudulent transactions for each model
+                fraud_transactions = record.get("fraud_transactions", {})
+                selected_models = record.get("selected_models", [])
+                for model in selected_models:
+                    st.write(f"#### Fraudulent Transactions Detected by {model}")
+                    fraud_data = fraud_transactions.get(model, pd.DataFrame())
+                    if not fraud_data.empty:
+                        st.dataframe(fraud_data)
+                    else:
+                        st.write(f"No fraud transactions detected by {model}.")
 
 if __name__ == "__main__":
     main()
