@@ -39,11 +39,6 @@ def load_models():
     except FileNotFoundError:
         st.warning("Random Forest model not found.")
 
-    try:
-        models["Light GBM"] = joblib.load("model/lightgbm_model.pkl")
-    except FileNotFoundError:
-        st.warning("Light GBM model not found.")
-
     return models
 
 @st.cache_data
@@ -306,6 +301,12 @@ def main():
             file_name = dataset_name
 
         if data is not None:
+            if not data.empty:
+                print(f"Data has {len(data)} rows and {len(data.columns)} columns.")
+                st.write("**Sample Data:**")
+                st.write(data.head())  # Display the first few rows
+            else:
+                st.error("No data found in the uploaded file.")
             v_features, features = detect_features(data)
             if features:
                 selected_models = st.multiselect("Select Models", models.keys())
